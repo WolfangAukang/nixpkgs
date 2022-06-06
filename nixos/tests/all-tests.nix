@@ -84,6 +84,7 @@ in {
   cjdns = handleTest ./cjdns.nix {};
   clickhouse = handleTest ./clickhouse.nix {};
   cloud-init = handleTest ./cloud-init.nix {};
+  cloudflare-warp = handleTest ./cloudflare-warp.nix {};
   cntr = handleTest ./cntr.nix {};
   cockroachdb = handleTestOn ["x86_64-linux"] ./cockroachdb.nix {};
   collectd = handleTest ./collectd.nix {};
