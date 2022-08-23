@@ -11,23 +11,80 @@ in {
   options = {
     services.cloudflare-warp = {
       enable = mkEnableOption "cloudflare-warp, a service that replaces the connection between your device and the Internet with a modern, optimized, protocol";
+
+      package = mkOption {
+        type = types.package;
+        default = pkgs.cloudflare-warp;
+        defaultText = "pkgs.cloudflare-warp";
+        description = "The package to use for Cloudflare Warp.";
+      };
+
+      user = mkOption {
+        type = types.str;
+        default = "warp";
+        description = "User account under which Cloudflare Warp runs.";
+      };
+
+      group = mkOption {
+        type = types.str;
+        default = "warp";
+        description = "Group under which Cloudflare Warp runs.";
+      };
+
+      certificate = mkOption {
+        type = with types; nullOr path;
+        default = null;
+        description = ''
+          Path to the Cloudflare root certificate.  There is a download link in the docs <link xlink:href="https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/install-cloudflare-cert/">here</link>.
+        '';
+      };
+
+      udpPort = mkOption {
+        type = types.int;
+        default = 2408;
+        description = ''
+          The UDP port to open in the firewall.  Warp uses port 2408 by default, but fallback ports can be used if that conflicts with another service.  See the <link xlink:href="https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/deployment/firewall#warp-udp-ports">firewall documenation</link> for the pre-configured available fallback ports.
+        '';
+      };
+
+      openFirewall = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Opens UDP port in the firewall.  See `udpPort` configuration option, and <link xlink:href="https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/deployment/firewall#warp-udp-ports">firewall documenation</link>.
+        '';
+      };
+
     };
   };
 
   config = mkIf cfg.enable {
-    environment.systemPackages = with pkgs; [ cloudflare-warp ];
+    environment.systemPackages = with pkgs; [ cfg.package ];
 
-    users.users.warp = {
-      isSystemUser = true;
-      group = "warp";
-      description = "Cloudflare Warp user";
-      home = "/var/lib/cloudflare-warp";
+    security.pki = mkIf (cfg.certificate != null) {
+      certificateFiles = [ cfg.certificate ];
     };
-    users.groups.warp = {};
+
+    networking.firewall = mkIf cfg.openFirewall {
+      allowedUDPPorts = [ cfg.udpPort ];
+    };
+
+    users.users = mkIf (cfg.user == "warp") {
+      warp = {
+        isSystemUser = true;
+        group = "warp";
+        description = "Cloudflare Warp user";
+        home = "/var/lib/cloudflare-warp";
+      };
+    };
+    users.groups = mkIf (cfg.group == "warp") {
+      warp = { };
+    };
 
     systemd = {
-      packages = [ pkgs.cloudflare-warp ];
+      packages = [ cfg.package ];
       services.warp-svc = {
+        after = [ "network-online.target" "systemd-resolved.service" ];
         wantedBy = [ "multi-user.target" ];
         serviceConfig = {
           StateDirectory = "cloudflare-warp";
